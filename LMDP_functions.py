@@ -6,7 +6,7 @@ def bellman_update(state, value_function, transition_probabilities, rewards, gam
     for action in feasible_actions:
         sum_over_states = sum(transition_probabilities[state][action][next_state] *
                               (rewards[state][action][next_state] + gamma * value_function[next_state])
-                              for next_state in range(len(value_function)))  # Update here to transitions to loop through states
+                              for next_state in range(len(value_function)))  # Update here to transitions to loop through states +modify rewards
         if sum_over_states > best_value:
             best_value = sum_over_states
     return best_value
@@ -34,7 +34,7 @@ def lexicographic_value_iteration(states, actions, transition_probabilities, rew
                     q_values[state, action] = sum(transition_probabilities[state][action][next_state] *
                                                    (rewards[objective][state][action][next_state] +
                                                     gamma * value_function[next_state])
-                                                   for next_state in states) # Update here to transitions to loop through states 
+                                                   for next_state in states) # Update here to transitions to loop through states + modifiy rewards
 
                 if objective == 0:
                     feasible_actions = actions  # All actions are considered for the first objective
@@ -62,7 +62,7 @@ def derive_policy(states, actions, transition_probabilities, rewards, final_valu
         for action in actions:
             current_value = sum(transition_probabilities[state][action][next_state] *
                                 (rewards[state][action][next_state] + gamma * final_values[next_state])
-                                for next_state in states)  # Update here to transitions to loop through states
+                                for next_state in states)  # Update here to transitions to loop through states + modify rewards
             if current_value > best_value:
                 best_value = current_value
                 best_action = action
