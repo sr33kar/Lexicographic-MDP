@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 
+####################################################################################################################################
 # Load data from CSV files
 states_df = pd.read_csv('nse.csv')
 rewards_primary_df = pd.read_csv('rewards.csv')  # Assume this is the primary objective
@@ -9,31 +10,27 @@ rewards_secondary_df = states_df  # Secondary objective from nse.csv
 transitions_df = pd.read_csv('transitions.csv', header=None, names=['state', 'action', 'next_state', 'probability'])
 
 # Process states and actions
-states = list(transitions_df['state'].append(transitions_df['next_state']).unique())
+states = list(states_df['state'].unique())
 actions = list(transitions_df['action'].unique())
 
 ####################################################################################################################################
 # Initialize reward and transition structures
-rewards = {0: {}, 1: {}}
-transition_probabilities = {}
+def read_state_values(filename):
+    state_values = {}
+    df = pd.read_csv(filename)
+    for index, row in df.iterrows():
+        state = row[0]
+        value = float(row[1])
+        state_values[state] = value
+    return state_values
 
-for state in states:
-    transition_probabilities[state] = {}
-    rewards[0][state] = {}
-    rewards[1][state] = {}
+file1 = 'rewards.csv'
+file2 = 'nse.csv'
 
-    for action in actions:
-        transition_probabilities[state][action] = {}
-        rewards[0][state][action] = {}
-        rewards[1][state][action] = {}
+state_values_1 = read_state_values(file1)
+state_values_2 = read_state_values(file2)
 
-# Populate transition probabilities and rewards from data
-for _, row in transitions_df.iterrows():
-    s, a, s_next, p = row['state'], row['action'], row['next_state'], row['probability']
-    transition_probabilities[s][a][s_next] = p
-    # Assume rewards are available for each (state, action, next_state) triplet
-    rewards[0][s][a][s_next] = rewards_primary_df.loc[(rewards_primary_df['state'] == s) & (rewards_primary_df['action'] == a), 'value'].values[0]
-    rewards[1][s][a][s_next] = rewards_secondary_df.loc[(rewards_secondary_df['state'] == s) & (rewards_secondary_df['action'] == a), 'value'].values[0]
+rewards = [state_values_1, state_values_2]
 
 
 ########################################################################################################################################
@@ -67,12 +64,12 @@ def get_probability(s1, action, s2):
 
 ###################################################################################################################################
 # bellman backup
-def bellman_update(state, value_function, transition_probabilities, rewards, gamma, feasible_actions):
+def bellman_update(state, value_function, rewards, gamma, feasible_actions):
     """Performs the Bellman update for a given state."""
     best_value = float('-inf')
     for action in feasible_actions:
-        sum_over_states = sum(transition_probabilities[state][action][next_state] *
-                              (rewards[state][action][next_state] + gamma * value_function[next_state])
+        sum_over_states = sum(get_probability(state, action, next_state) *
+                              (rewards[state] + gamma * value_function[next_state])
                               for next_state in get_s2_states(state, action))  # Update here to transitions to loop through states +modify rewards
         if sum_over_states > best_value:
             best_value = sum_over_states
@@ -90,7 +87,7 @@ def filter_actions(states, actions, q_values, eta):
 
 ############################################################################################################################################
 # lexicographic value iteration
-def lexicographic_value_iteration(states, actions, transition_probabilities, rewards, gamma, eta, epsilon, max_iterations):
+def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon, max_iterations):
     objective_count = len(rewards)
     values = np.zeros((objective_count, len(states)))
 
@@ -100,21 +97,23 @@ def lexicographic_value_iteration(states, actions, transition_probabilities, rew
             new_value_function = np.copy(value_function)
             for state in states:
                 q_values = {}
+                
                 for action in actions:
-                    q_values[state, action] = sum(transition_probabilities[state][action][next_state] *
-                                                  (rewards[objective][state][action][next_state] +
+                    q_values[state, action] = sum(get_probability(state, action, next_state)  *
+                                                  (rewards[objective][state] +
                                                    gamma * value_function[next_state])
                                                   for next_state in get_s2_states(state, action))
+                if objective == 0:
 
-                feasible_actions = filter_actions(states, actions, q_values, eta)[state]
-
-                new_value_function[state] = bellman_update(state, value_function, transition_probabilities, rewards[objective], gamma, feasible_actions)
+                    new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, actions)
+                else:
+                    new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, feasible_actions[state])
 
             if np.max(np.abs(new_value_function - value_function)) < epsilon:
                 break
             value_function = new_value_function
         values[objective] = value_function
-
+        feasible_actions = filter_actions(states, actions, q_values, eta)[state]
     return values
 
 ############################################################################################################################################
@@ -144,8 +143,8 @@ eta = (1-gamma)*delta    # Slack variable for filtering actions
 epsilon = 0.01  # Convergence threshold
 max_iterations = 1000  # Max iterations for value iteration
 
-x,y = lexicographic_value_iteration(states, actions, transition_probabilities, rewards, gamma, eta, epsilon, max_iterations)
+x,y = lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon, max_iterations)
 
-policy = derive_policy(states, actions, transition_probabilities, rewards, y, gamma)
+policy = derive_policy(states, actions, rewards, y, gamma)
 
 print(policy)
