@@ -113,8 +113,12 @@ def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon,
                     new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, actions)
                 else:
                     new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, feasible_actions[state])
-
-            if np.max(np.abs(new_value_function - value_function)) < epsilon:
+            
+            max = float('-inf')
+            for state in states:
+                diff = abs(new_value_function[state] - value_function[state])
+                if diff > max: max = diff
+            if max < epsilon:
                 break
             value_function = new_value_function
         values[objective] = value_function
@@ -123,7 +127,7 @@ def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon,
 
 ############################################################################################################################################
 # policy generation
-def derive_policy(states, actions, transition_probabilities, rewards, final_values, gamma):
+def derive_policy(states, actions, rewards, final_values, gamma):
     """Derives the optimal policy from the final value functions."""
     policy = {}
     for state in states:
@@ -148,8 +152,8 @@ eta = (1-gamma)*delta    # Slack variable for filtering actions
 epsilon = 0.01  # Convergence threshold
 max_iterations = 1000  # Max iterations for value iteration
 
-x,y = lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon, max_iterations)
+x = lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon, max_iterations)
 
-policy = derive_policy(states, actions, rewards, y, gamma)
+policy = derive_policy(states, actions, rewards, x[1], gamma)
 
 print(policy)
