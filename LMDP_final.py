@@ -14,7 +14,7 @@ states = list(states_df['state'].unique())
 actions = list(transitions_df['action'].unique())
 
 ####################################################################################################################################
-# Initialize reward and transition structures
+# Initialize reward structures
 def read_state_values(filename):
     state_values = {}
     df = pd.read_csv(filename)
@@ -59,8 +59,8 @@ def get_s2_states(s1, action):
 # Function to get probability for given s1, action, and s2
 def get_probability(s1, action, s2):
     if s1 in transitions and action in transitions[s1] and s2 in transitions[s1][action]:
-        return transitions[s1][action][s2]
-    return 0
+        return float(transitions[s1][action][s2])
+    return 0.0
 
 ###################################################################################################################################
 # bellman backup
@@ -89,12 +89,17 @@ def filter_actions(states, actions, q_values, eta):
 # lexicographic value iteration
 def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon, max_iterations):
     objective_count = len(rewards)
-    values = np.zeros((objective_count, len(states)))
+    values = []
 
     for objective in range(objective_count):
-        value_function = np.zeros(len(states))
+        
+        #value funtion initialized
+        value_function = {}
+        for state in states:
+            value_function[state] = 0
+
         for iteration in range(max_iterations):
-            new_value_function = np.copy(value_function)
+            new_value_function = value_function.copy()
             for state in states:
                 q_values = {}
                 
@@ -113,7 +118,7 @@ def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon,
                 break
             value_function = new_value_function
         values[objective] = value_function
-        feasible_actions = filter_actions(states, actions, q_values, eta)[state]
+        if objective == 0: feasible_actions = filter_actions(states, actions, q_values, eta)[state] 
     return values
 
 ############################################################################################################################################
@@ -127,8 +132,8 @@ def derive_policy(states, actions, transition_probabilities, rewards, final_valu
         
         # Iterate through all possible actions to find the best one for the current state
         for action in actions:
-            current_value = sum(transition_probabilities[state][action][next_state] *
-                                (rewards[state][action][next_state] + gamma * final_values[next_state])
+            current_value = sum(get_probability(state, action, next_state) *
+                                (rewards[state] + gamma * final_values[next_state])
                                 for next_state in get_s2_states(state, action))  # Update here to transitions to loop through states + modify rewards
             if current_value > best_value:
                 best_value = current_value
