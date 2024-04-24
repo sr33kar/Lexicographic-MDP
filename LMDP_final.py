@@ -62,6 +62,12 @@ def get_probability(s1, action, s2):
         return float(transitions[s1][action][s2])
     return 0.0
 
+# Function to get all actions for a given state s1
+def get_actions(s1):
+    if s1 in transitions:
+        return list(transitions[s1].keys())
+    return []
+
 ###################################################################################################################################
 # bellman backup
 def bellman_update(state, value_function, rewards, gamma, feasible_actions):
@@ -81,15 +87,15 @@ def filter_actions(states, actions, q_values, eta):
     """Filters actions for each state based on the Q-values and a small slack variable eta."""
     filtered_actions = {}
     for state in states:
-        max_q_value = max(q_values[state, action] for action in actions)
-        filtered_actions[state] = [action for action in actions if q_values[state, action] >= max_q_value - eta]
+        max_q_value = max(q_values[state, action] for action in get_actions(state))
+        filtered_actions[state] = [action for action in get_actions(state) if q_values[state, action] >= max_q_value - eta]
     return filtered_actions
 
 ############################################################################################################################################
 # lexicographic value iteration
 def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon, max_iterations):
     objective_count = len(rewards)
-    values = []
+    values = [[],[]]
 
     for objective in range(objective_count):
         
@@ -99,18 +105,19 @@ def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon,
             value_function[state] = 0
 
         for iteration in range(max_iterations):
+            
             new_value_function = value_function.copy()
-            for state in states:
-                q_values = {}
-                
-                for action in actions:
+            q_values = {}
+            
+            for state in states:  
+                for action in get_actions(state):
                     q_values[state, action] = sum(get_probability(state, action, next_state)  *
                                                   (rewards[objective][state] +
                                                    gamma * value_function[next_state])
                                                   for next_state in get_s2_states(state, action))
+                
                 if objective == 0:
-
-                    new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, actions)
+                    new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, get_actions(state))#update actions
                 else:
                     new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, feasible_actions[state])
             
@@ -122,7 +129,8 @@ def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon,
                 break
             value_function = new_value_function
         values[objective] = value_function
-        if objective == 0: feasible_actions = filter_actions(states, actions, q_values, eta)[state] 
+        if objective == 0: 
+            feasible_actions = filter_actions(states, actions, q_values, eta)
     return values
 
 ############################################################################################################################################
@@ -135,7 +143,7 @@ def derive_policy(states, actions, rewards, final_values, gamma):
         best_value = float('-inf')
         
         # Iterate through all possible actions to find the best one for the current state
-        for action in actions:
+        for action in get_actions(state):
             current_value = sum(get_probability(state, action, next_state) *
                                 (rewards[state] + gamma * final_values[next_state])
                                 for next_state in get_s2_states(state, action))  # Update here to transitions to loop through states + modify rewards
@@ -154,6 +162,6 @@ max_iterations = 1000  # Max iterations for value iteration
 
 x = lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon, max_iterations)
 
-policy = derive_policy(states, actions, rewards, x[1], gamma)
+policy = derive_policy(states, actions, rewards[1], x[1], gamma)
 
 print(policy)
