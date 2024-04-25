@@ -83,13 +83,12 @@ def bellman_update(state, value_function, rewards, gamma, feasible_actions):
 
 ###########################################################################################################################################
 # filtering actions
-def filter_actions(states, actions, rewards, q_values, eta):
+def filter_actions(states, actions, q_values, eta):
     """Filters actions for each state based on the Q-values and a small slack variable eta."""
     filtered_actions = {}
     for state in states:
-    #     max_q_value = max(q_values[state, action] for action in get_actions(state)) 
-    # sum(get_probability(state, action, next_state)  *(rewards[objective][next_state]) for next_state in get_s2_states(state, action))
-         filtered_actions[state] = [action for action in get_actions(state) if sum(get_probability(state, action, next_state)  *(rewards[next_state]) for next_state in get_s2_states(state, action)) >= 0]
+    #     max_q_value = max(q_values[state, action] for action in get_actions(state))
+        filtered_actions[state] = [action for action in get_actions(state) if rewards[1][state] >= 0] #need to update
     return filtered_actions
     
 
@@ -132,7 +131,7 @@ def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon,
             value_function = new_value_function
         values[objective] = value_function
         if objective == 0: 
-            feasible_actions = filter_actions(states, actions, rewards[objective+1],q_values, eta)
+            feasible_actions = filter_actions(states, actions, q_values, eta)
     return values
 
 ############################################################################################################################################
