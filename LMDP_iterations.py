@@ -4,16 +4,16 @@ import pandas as pd
 
 ####################################################################################################################################
 # Load data from CSV files
-states_df = pd.read_csv('nse.csv')
-rewards_primary_df = pd.read_csv('rewards.csv')  # Assume this is the primary objective
+states_df = pd.read_csv('nse-1.csv')
+rewards_primary_df = pd.read_csv('rewards-1.csv')  # Assume this is the primary objective
 rewards_secondary_df = states_df  # Secondary objective from nse.csv
-transitions_df = pd.read_csv('transitions.csv', header=None, names=['state', 'action', 'next_state', 'probability'])
+transitions_df = pd.read_csv('transitions-1.csv', header=None, names=['state', 'action', 'next_state', 'probability'])
 
 # Process states and actions
 states = list(states_df['state'].unique())
 actions = list(transitions_df['action'].unique())
 initial_state = '(0 0)'
-goal_state = '(3 2)'
+goal_state = '(3 0)'
 ####################################################################################################################################
 # Initialize reward structures
 def read_state_values(filename):
@@ -25,8 +25,8 @@ def read_state_values(filename):
         state_values[state] = value
     return state_values
 
-file1 = 'rewards.csv'
-file2 = 'nse.csv'
+file1 = 'rewards-1.csv'
+file2 = 'nse-1.csv'
 
 state_values_1 = read_state_values(file1)
 state_values_2 = read_state_values(file2)
@@ -88,8 +88,9 @@ def filter_actions(states, actions, q_values, eta):
     """Filters actions for each state based on the Q-values and a small slack variable eta."""
     filtered_actions = {}
     for state in states:
-        max_q_value = max(q_values[state, action] for action in get_actions(state))
-        filtered_actions[state] = [action for action in get_actions(state) if q_values[state, action] >= max_q_value - eta]
+        if state != goal_state: 
+            max_q_value = max(q_values[state, action] for action in get_actions(state))
+            filtered_actions[state] = [action for action in get_actions(state) if q_values[state, action] >= max_q_value - eta]
     return filtered_actions
 
 ############################################################################################################################################
@@ -106,32 +107,36 @@ def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon,
         value_function = {}
         for state in states:
             value_function[state] = 0
-
+        value_function[goal_state] = rewards[objective][goal_state]
         for iteration in range(max_iterations):
             
             new_value_function = value_function.copy()
             q_values = {}
             # print('its okay 1')
-            for state in states:  
-                for action in get_actions(state):
-                    q_values[state, action] = sum(get_probability(state, action, next_state)  *
-                                                  (rewards[objective][state] +
-                                                   gamma * value_function[next_state])
-                                                  for next_state in get_s2_states(state, action))
-                # print('its okay 2')
-                if objective == 0:
-                    new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, get_actions(state))#update actions
-                else:
-                    new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, feasible_actions[state])
-                # print('its okay 3')
-            max = float('-inf')
             for state in states:
-                diff = abs(new_value_function[state] - value_function[state])
-                if diff > max: max = diff
+                if state != goal_state:
+                    for action in get_actions(state):
+                        q_values[state, action] = sum(get_probability(state, action, next_state)  *
+                                                    (rewards[objective][state] +
+                                                    gamma * value_function[next_state])
+                                                    for next_state in get_s2_states(state, action))
+                    # print('its okay 2')
+                    if objective == 0:
+                        new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, get_actions(state))#update actions
+                    else:
+                        new_value_function[state] = bellman_update(state, value_function, rewards[objective], gamma, feasible_actions[state])
+                    # print('its okay 3')
+            max = float('-inf')
+            
+            for state in states:
+                if state != goal_state:
+                    diff = abs(new_value_function[state] - value_function[state])
+                    if diff > max:
+                        max = diff
             if max < epsilon:
                 break
             value_function = new_value_function
-            # print('its okay 4')
+            # print("values :",value_function)
             #derive_policy()
             if objective == 0:
                 policy = derive_policy(states, actions, rewards[objective], value_function, gamma)
@@ -139,6 +144,7 @@ def lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon,
                 policy = derive_policy_nse(states, feasible_actions, rewards[objective], value_function, gamma)
             # print('its okay 5')
             # execute policy and add find rewards for each iteration
+            # print("Policies :",policy)
             reward[objective].append(execute_policy(initial_state, goal_state, policy, rewards[0], gamma)[0])
             penalties[objective].append(execute_policy(initial_state, goal_state, policy, rewards[1], gamma)[0])
             
@@ -156,19 +162,20 @@ def derive_policy(states, actions, rewards, final_values, gamma):
     """Derives the optimal policy from the final value functions."""
     policy = {}
     for state in states:
-        best_action = None
-        best_value = float('-inf')
-        
-        # Iterate through all possible actions to find the best one for the current state
-        for action in get_actions(state):
-            current_value = sum(get_probability(state, action, next_state) *
-                                (rewards[state] + gamma * final_values[next_state])
-                                for next_state in get_s2_states(state, action))  # Update here to transitions to loop through states + modify rewards
-            if current_value > best_value:
-                best_value = current_value
-                best_action = action
-        
-        policy[state] = best_action
+        if state != goal_state:
+            best_action = None
+            best_value = float('-inf')
+            
+            # Iterate through all possible actions to find the best one for the current state
+            for action in get_actions(state):
+                current_value = sum(get_probability(state, action, next_state) *
+                                    (rewards[state] + gamma * final_values[next_state])
+                                    for next_state in get_s2_states(state, action))  # Update here to transitions to loop through states + modify rewards
+                if current_value > best_value:
+                    best_value = current_value
+                    best_action = action
+            
+            policy[state] = best_action
     return policy
 
 # policy generation for nse objective
@@ -176,19 +183,20 @@ def derive_policy_nse(states, feasible_actions, rewards, final_values, gamma):
     """Derives the optimal policy from the final value functions."""
     policy = {}
     for state in states:
-        best_action = None
-        best_value = float('-inf')
-        
-        # Iterate through all possible actions to find the best one for the current state
-        for action in feasible_actions[state]:
-            current_value = sum(get_probability(state, action, next_state) *
-                                (rewards[state] + gamma * final_values[next_state])
-                                for next_state in get_s2_states(state, action))  # Update here to transitions to loop through states + modify rewards
-            if current_value > best_value:
-                best_value = current_value
-                best_action = action
-        
-        policy[state] = best_action
+        if state != goal_state:
+            best_action = None
+            best_value = float('-inf')
+            
+            # Iterate through all possible actions to find the best one for the current state
+            for action in feasible_actions[state]:
+                current_value = sum(get_probability(state, action, next_state) *
+                                    (rewards[state] + gamma * final_values[next_state])
+                                    for next_state in get_s2_states(state, action))  # Update here to transitions to loop through states + modify rewards
+                if current_value > best_value:
+                    best_value = current_value
+                    best_action = action
+            
+            policy[state] = best_action
     return policy
 
 
@@ -204,46 +212,55 @@ def get_all_policies(values, rewards):
 def execute_policy(initial_state, goal_state, policy, rewards, gamma):
     curr_state = initial_state
     counter = 0
-    reward = 0
+    reward = rewards[curr_state]
+    # print(">>>>>>>>>>>>>>>>>>>>>>>")
     while curr_state != goal_state and counter <100:
         possible_states = {}
         action = policy[curr_state]
+        # print(" ",action)
         for next_state in get_s2_states(curr_state, action):
             probability = get_probability(curr_state, action, next_state)
             possible_states[next_state] = probability
-        next_state = get_s2_states(curr_state, action)[0]
-        # p = np.random.rand()
-        # if p <= 0.8:
-        #     next_state = ""
-        #     for i in possible_states.keys():
-        #         if possible_states[i] == 0.8:
-        #             next_state = i
-        #             break
-        # else:
-        #     states = []
-        #     for i in possible_states.keys():
-        #         if possible_states[i] == 0.1:
-        #             states.append(i)
-        #     if np.random.rand()<=0.5:
-        #         next_state = states[0]
-        #     else:
-        #         next_state = states[1]
-        # print(rewards)
+            # next_state = get_s2_states(curr_state, action)[0]
+        p = np.random.rand()
+        next_state = ""
+        if p <= 0.8:
+            for i in possible_states.keys():
+                if possible_states[i] == 0.8:
+                    next_state = i
+                    break
+        else:
+            states = []
+            # next_state = ""
+            for i in possible_states.keys():
+                if possible_states[i] == 0.1:
+                    states.append(i)
+            print(states)
+            if np.random.rand()<=0.5:
+                next_state = states[0]
+            else:
+                next_state = states[1]
+       # print(rewards)
+        curr_state = next_state
         reward += (gamma**counter)*rewards[curr_state]
         counter += 1
-        curr_state = next_state
+        
+    # print("=============================================")
     return reward, counter
 
-gamma = 0.95  # Discount factor
-delta = 0.2
+gamma = 0.9  # Discount factor
+delta = 0.3
 eta = (1-gamma)*delta    # Slack variable for filtering actions
 epsilon = 0.01  # Convergence threshold
-max_iterations = 1000  # Max iterations for value iteration
+max_iterations = 100 # Max iterations for value iteration
 
 results = lexicographic_value_iteration(states, actions, rewards, gamma, eta, epsilon, max_iterations)
 
-# policy = derive_policy(states, actions, rewards[1], x[1], gamma)
+print("values MDP :",results[0][0])
+policy_mdp = derive_policy(states, actions, rewards[0], results[0][0], gamma)
+print("MDP policy :", policy_mdp)
 
-
-
+print("values MDP :",results[0][1])
+policy_lmdp = derive_policy_nse(states, results[1], rewards[1], results[0][1], gamma)
+print("LMDP policy :", policy_lmdp)
 print("reward : \n",results[2], "\n", "penalties: \n", results[3],"\n","counts \n" ,results[4])
